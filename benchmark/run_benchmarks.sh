@@ -2,9 +2,17 @@
 set -e
 
 RESULTS_CSV="results/benchmark_results.csv"
+WARMUP_DURATION="${WARMUP_DURATION:-60}"
+BENCH_DURATION="${BENCH_DURATION:-300}"
+COOLDOWN_DURATION="${COOLDOWN_DURATION:-60}"
+WORK_MEM="${WORK_MEM:-4MB}"
+ALLOW_DISK_USE_FLAG="${ALLOW_DISK_USE_FLAG:-}"
+RESUME_FROM="${RESUME_FROM:-}"
+RESUME_REACHED=0
 
-# Inicializar cabecera del CSV si no existe
-if [ ! -f "$RESULTS_CSV" ]; then
+# Inicializar cabecera del CSV si no existe o esta vacio
+if [ ! -f "$RESULTS_CSV" ] || [ ! -s "$RESULTS_CSV" ]; then
+    mkdir -p "$(dirname "$RESULTS_CSV")"
     echo "timestamp_epoch,engine,profile,query_id,concurrency,run_number,throughput_qps,latency_p50_ms,latency_p95_ms,latency_p99_ms,cpu_throttled_seconds,max_rss_mb,disk_spill,status" > "$RESULTS_CSV"
 fi
 
@@ -47,6 +55,13 @@ for PROFILE in "PROFILE_A_BASELINE" "PROFILE_B_MEDIUM" "PROFILE_C_SEVERE"; do
         for QUERY in "Q1" "Q2"; do
             for CONCURRENCY in 1 10 50; do
                 for RUN in 1 2 3; do
+                    ITERATION_KEY="${PROFILE}|${ENGINE}|${QUERY}|${CONCURRENCY}|${RUN}"
+                    if [ -n "$RESUME_FROM" ] && [ "$RESUME_REACHED" -eq 0 ]; then
+                        if [ "$ITERATION_KEY" != "$RESUME_FROM" ]; then
+                            continue
+                        fi
+                        RESUME_REACHED=1
+                    fi
 
                     echo "--> Iteration: $ENGINE | $PROFILE | $QUERY | Conc: $CONCURRENCY | Run: $RUN"
 
@@ -54,21 +69,34 @@ for PROFILE in "PROFILE_A_BASELINE" "PROFILE_B_MEDIUM" "PROFILE_C_SEVERE"; do
                     echo "Clearing Host Cache..."
                     sync; sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'
 
-                    # 2. Warmup (60s)
-                    echo "Warming up (60s)..."
-                    python3 benchmark/runner.py --engine "$ENGINE" --query-id "$QUERY" --profile "$PROFILE" --concurrency "$CONCURRENCY" --run-number "$RUN" --duration 60 > /dev/null
+                    EXTRA_ARGS=()
+                    if [ "$ENGINE" = "postgres" ] && [ "$QUERY" = "Q2" ]; then
+                        EXTRA_ARGS+=(--work-mem "$WORK_MEM")
+                    fi
+                    if [ "$ENGINE" = "mongo" ] && [ "$QUERY" = "Q2" ] && [ -n "$ALLOW_DISK_USE_FLAG" ]; then
+                        EXTRA_ARGS+=(--allow-disk-use)
+                    fi
 
-                    # 3. Medición (300s)
-                    echo "Measuring (300s)..."
-                    python3 benchmark/runner.py --engine "$ENGINE" --query-id "$QUERY" --profile "$PROFILE" --concurrency "$CONCURRENCY" --run-number "$RUN" --duration 300 --output-csv "$RESULTS_CSV"
+                    # 2. Warmup
+                    echo "Warming up (${WARMUP_DURATION}s)..."
+                    python3 benchmark/runner.py --engine "$ENGINE" --query-id "$QUERY" --profile "$PROFILE" --concurrency "$CONCURRENCY" --run-number "$RUN" --duration "$WARMUP_DURATION" "${EXTRA_ARGS[@]}" --no-output > /dev/null
 
-                    # 4. Cooldown (60s)
-                    echo "Cooldown (60s)..."
-                    sleep 60
+                    # 3. Medición
+                    echo "Measuring (${BENCH_DURATION}s)..."
+                    python3 benchmark/runner.py --engine "$ENGINE" --query-id "$QUERY" --profile "$PROFILE" --concurrency "$CONCURRENCY" --run-number "$RUN" --duration "$BENCH_DURATION" "${EXTRA_ARGS[@]}" --output-csv "$RESULTS_CSV"
+
+                    # 4. Cooldown
+                    echo "Cooldown (${COOLDOWN_DURATION}s)..."
+                    sleep "$COOLDOWN_DURATION"
                 done
             done
         done
     done
 done
+
+if [ -n "$RESUME_FROM" ] && [ "$RESUME_REACHED" -eq 0 ]; then
+    echo "Resume point not found: $RESUME_FROM" >&2
+    exit 1
+fi
 
 echo "Matriz completada exitosamente. Resultados guardados en $RESULTS_CSV"

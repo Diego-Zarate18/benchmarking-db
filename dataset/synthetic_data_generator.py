@@ -138,6 +138,10 @@ def load_data(
 
                 inserted = 0
                 for batch in batches(count, rng):
+                    postgres_rows = [
+                        (order["order_id"], json.dumps(order))
+                        for order in batch
+                    ]
                     mongo_collection.insert_many(batch, ordered=False)
                     execute_values(
                         cursor,
@@ -145,10 +149,7 @@ def load_data(
                         INSERT INTO orders (id, data)
                         VALUES %s
                         """,
-                        [
-                            (order["order_id"], json.dumps(order))
-                            for order in batch
-                        ],
+                        postgres_rows,
                         template="(%s, %s::jsonb)",
                         page_size=BATCH_SIZE,
                     )
@@ -194,7 +195,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--pg-url",
-        default="postgresql://postgres:postgrespassword@localhost:5432/benchmark_db",
+        default="postgresql://postgres:123456@localhost:5432/benchmark_db",
         help="PostgreSQL connection URL",
     )
     parser.add_argument(

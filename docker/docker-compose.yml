@@ -6,6 +6,8 @@ services:
       MONGO_INITDB_DATABASE: benchmark_db
     ports:
       - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
     deploy:
       resources:
         limits:
@@ -15,12 +17,15 @@ services:
   postgres:
     image: postgres:latest
     container_name: benchmark_pg
+    shm_size: "1gb"
     environment:
       POSTGRES_DB: benchmark_db
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_PASSWORD: 123456
     ports:
       - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
     deploy:
       resources:
         limits:
@@ -51,3 +56,7 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+
+volumes:
+  mongo_data:
+  pg_data:

@@ -14,7 +14,7 @@ import numpy as np
 import psycopg2
 from pymongo import MongoClient
 
-def query_prometheus(metric_query: str) -> float:
+def query_prometheus(metric_query: str) -> float | None:
     try:
         url = f"http://localhost:9090/api/v1/query?query={urllib.parse.quote(metric_query)}"
         req = urllib.request.urlopen(url, timeout=5)
@@ -22,13 +22,58 @@ def query_prometheus(metric_query: str) -> float:
         result = res.get("data", {}).get("result", [])
         if result:
             return float(result[0]["value"][1])
-        print(
-            f"Prometheus returned no data for query: {metric_query}",
-            file=sys.stderr,
-        )
-    except (OSError, ValueError, KeyError, json.JSONDecodeError) as error:
-        print(f"Prometheus query failed: {error}", file=sys.stderr)
+    except Exception as error:
+        print(f"Prometheus query failed for '{metric_query}': {error}", file=sys.stderr)
+    return None
+
+
+def get_throttled_counter(container_name: str, container_id: str) -> float:
+    selectors = [
+        f'name=~".*{container_name}.*"',
+        f'id="/docker/{container_id}"',
+        f'id=~".*{container_id}.*"',
+    ]
+    for sel in selectors:
+        val = query_prometheus(f"container_cpu_cfs_throttled_seconds_total{{{sel}}}")
+        if val is not None:
+            return val
     return 0.0
+
+
+def get_max_rss_mb(container_name: str, container_id: str, duration: int) -> float:
+    selectors = [
+        f'name=~".*{container_name}.*"',
+        f'id="/docker/{container_id}"',
+        f'id=~".*{container_id}.*"',
+    ]
+    metrics = ["container_memory_rss", "container_memory_rss_bytes"]
+    # 1. Intentar max_over_time durante el intervalo de medición
+    for sel in selectors:
+        for m in metrics:
+            val = query_prometheus(f"max_over_time({m}{{{sel}}}[{duration}s])")
+            if val is not None and val > 0:
+                return val / (1024 * 1024)
+    # 2. Fallback a valor instantáneo
+    for sel in selectors:
+        for m in metrics:
+            val = query_prometheus(f"{m}{{{sel}}}")
+            if val is not None and val > 0:
+                return val / (1024 * 1024)
+    return 0.0
+
+
+def check_container_oom(container_name: str) -> bool:
+    try:
+        result = subprocess.run(
+            ["docker", "inspect", "-f", "{{.State.OOMKilled}}", container_name],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return result.stdout.strip().lower() == "true"
+    except Exception:
+        return False
 
 
 def docker_container_id(container_name: str) -> str:
@@ -38,6 +83,7 @@ def docker_container_id(container_name: str) -> str:
             check=True,
             capture_output=True,
             text=True,
+            timeout=5,
         )
     except (OSError, subprocess.CalledProcessError) as error:
         print(f"Could not inspect {container_name}: {error}", file=sys.stderr)
@@ -149,7 +195,17 @@ def worker_loop(engine, query_id, duration, allow_disk_use, work_mem, mongo_url,
                 latencies.append((time.perf_counter() - t0) * 1000)
             except Exception as error:
                 print(f"{engine} {query_id} failed: {error}", file=sys.stderr)
+                if conn is not None:
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
                 latencies.append(-1)
+                if engine == "postgres" and isinstance(
+                    error,
+                    (psycopg2.InterfaceError, psycopg2.OperationalError),
+                ):
+                    break
     finally:
         if client is not None:
             client.close()
@@ -174,9 +230,14 @@ def main():
     )
     parser.add_argument(
         "--pg-url",
-        default="postgresql://postgres:postgrespassword@localhost:5432/benchmark_db",
+        default="postgresql://postgres:123456@localhost:5432/benchmark_db",
     )
     parser.add_argument("--output-csv", default="results/benchmark_results.csv")
+    parser.add_argument(
+        "--no-output",
+        action="store_true",
+        help="Run without appending a row to the CSV",
+    )
     args = parser.parse_args()
 
     if args.concurrency < 1:
@@ -188,9 +249,11 @@ def main():
     container_id = docker_container_id(container_name)
     if not container_id:
         raise SystemExit(f"Could not resolve Docker container: {container_name}")
-    metric_selector = f'id="/docker/{container_id}"'
 
     print(f"Running {args.engine} | {args.profile} | {args.query_id} | Conc: {args.concurrency} | Run: {args.run_number}...")
+
+    # Registrar valor base del contador de throttling antes de comenzar la medición
+    throttled_start = get_throttled_counter(container_name, container_id)
 
     with ThreadPoolExecutor(max_workers=args.concurrency) as executor:
         futures = [
@@ -215,15 +278,11 @@ def main():
     p95 = np.percentile(flat_latencies, 95) if flat_latencies else 0
     p99 = np.percentile(flat_latencies, 99) if flat_latencies else 0
 
-    # PromQL métricas de telemetría
-    throttled = query_prometheus(
-        f"container_cpu_cfs_throttled_seconds_total{{{metric_selector}}}"
-    )
-    max_rss = query_prometheus(
-        f"container_memory_rss{{{metric_selector}}}"
-    ) / (1024 * 1024)
+    # Registrar delta real de throttling y pico de memoria RSS durante la prueba
+    throttled_end = get_throttled_counter(container_name, container_id)
+    throttled = max(0.0, throttled_end - throttled_start)
+    max_rss = get_max_rss_mb(container_name, container_id, args.duration)
 
-    status = "ok" if flat_latencies else "failed"
     spill_measured = any(measured for _, _, measured in results)
     spill_observed = any(observed for _, observed, _ in results)
     if not spill_measured:
@@ -233,16 +292,27 @@ def main():
     else:
         spill = "not_observed"
 
+    # Determinar estado de la celda (ok / spill / oom / error)
+    if check_container_oom(container_name):
+        status = "oom"
+    elif not flat_latencies:
+        status = "error"
+    elif spill_observed:
+        status = "spill"
+    else:
+        status = "ok"
+
     epoch = int(datetime.now(timezone.utc).timestamp())
 
     # Escribir fila usando el esquema exacto
     row = f"{epoch},{args.engine},{args.profile},{args.query_id},{args.concurrency},{args.run_number},{throughput:.2f},{p50:.2f},{p95:.2f},{p99:.2f},{throttled:.2f},{max_rss:.2f},{spill},{status}\n"
 
-    output_directory = os.path.dirname(args.output_csv)
-    if output_directory:
-        os.makedirs(output_directory, exist_ok=True)
-    with open(args.output_csv, "a", encoding="utf-8") as f:
-        f.write(row)
+    if not args.no_output:
+        output_directory = os.path.dirname(args.output_csv)
+        if output_directory:
+            os.makedirs(output_directory, exist_ok=True)
+        with open(args.output_csv, "a", encoding="utf-8") as f:
+            f.write(row)
 
 if __name__ == "__main__":
     main()

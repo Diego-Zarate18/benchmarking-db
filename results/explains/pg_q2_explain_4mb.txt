@@ -1,0 +1,32 @@
+Limit  (cost=90659.01..90756.03 rows=833 width=96) (actual time=818.124..832.258 rows=1000.00 loops=1)
+  Output: ((data ->> 'order_id'::text)), (((data -> 'customer'::text) ->> 'id'::text)), ((((data -> 'payment'::text) ->> 'final_total'::text))::numeric)
+  Buffers: shared hit=15983 read=68001
+  ->  Gather Merge  (cost=90659.01..90756.03 rows=833 width=96) (actual time=818.122..832.213 rows=1000.00 loops=1)
+        Output: ((data ->> 'order_id'::text)), (((data -> 'customer'::text) ->> 'id'::text)), ((((data -> 'payment'::text) ->> 'final_total'::text))::numeric)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=15983 read=68001
+        ->  Sort  (cost=89658.99..89659.85 rows=347 width=96) (actual time=748.453..748.481 rows=716.33 loops=3)
+              Output: ((data ->> 'order_id'::text)), (((data -> 'customer'::text) ->> 'id'::text)), ((((data -> 'payment'::text) ->> 'final_total'::text))::numeric)
+              Sort Key: ((((orders.data -> 'payment'::text) ->> 'final_total'::text))::numeric) DESC
+              Sort Method: top-N heapsort  Memory: 276kB
+              Buffers: shared hit=15983 read=68001
+              Worker 0:  actual time=713.745..713.781 rows=879.00 loops=1
+                Sort Method: top-N heapsort  Memory: 272kB
+                Buffers: shared hit=4887 read=21807
+              Worker 1:  actual time=713.683..713.715 rows=879.00 loops=1
+                Sort Method: top-N heapsort  Memory: 275kB
+                Buffers: shared hit=5433 read=20032
+              ->  Parallel Seq Scan on public.orders  (cost=0.00..89644.35 rows=347 width=96) (actual time=0.860..737.556 rows=27679.33 loops=3)
+                    Output: (data ->> 'order_id'::text), ((data -> 'customer'::text) ->> 'id'::text), (((data -> 'payment'::text) ->> 'final_total'::text))::numeric
+                    Filter: ((((orders.data -> 'payment'::text) ->> 'status'::text) = 'completed'::text) AND (((orders.data ->> 'timestamp'::text))::timestamp with time zone >= '2026-01-01 00:00:00+00'::timestamp with time zone))
+                    Rows Removed by Filter: 138987
+                    Buffers: shared hit=15909 read=68001
+                    Worker 0:  actual time=0.824..703.343 rows=26364.00 loops=1
+                      Buffers: shared hit=4850 read=21807
+                    Worker 1:  actual time=1.035..703.446 rows=25273.00 loops=1
+                      Buffers: shared hit=5396 read=20032
+Planning:
+  Buffers: shared hit=12
+Planning Time: 0.529 ms
+Execution Time: 832.319 ms
