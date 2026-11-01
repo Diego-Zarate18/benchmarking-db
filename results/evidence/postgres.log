@@ -1,0 +1,47 @@
+
+PostgreSQL Database directory appears to contain a database; Skipping initialization
+
+2026-10-31 19:57:50.115 UTC [1] LOG:  starting PostgreSQL 18.6 (Debian 18.6-1.pgdg13+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+2026-10-31 19:57:50.115 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2026-10-31 19:57:50.116 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+2026-10-31 19:57:50.121 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-10-31 19:57:50.127 UTC [32] LOG:  database system was shut down at 2026-10-31 19:57:48 UTC
+2026-10-31 19:57:50.132 UTC [1] LOG:  database system is ready to accept connections
+2026-10-31 20:02:50.896 UTC [30] LOG:  checkpoint starting: time
+2026-10-31 20:02:51.999 UTC [30] LOG:  checkpoint complete: wrote 0 buffers (0.0%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.200 s, sync=0.017 s, total=1.301 s; sync files=2, longest=0.015 s, average=0.009 s; distance=0 kB, estimate=0 kB; lsn=0/57D13F80, redo lsn=0/57D13EF0
+2026-10-31 20:15:53.924 UTC [1] LOG:  client backend (PID 150) was terminated by signal 9: Killed
+2026-10-31 20:15:53.924 UTC [1] DETAIL:  Failed process was running: 
+	            SELECT data->'customer'->'geo'->>'country', item->>'category',
+	                   SUM((item->>'qty')::numeric * (item->>'price')::numeric),
+	                   AVG((item->>'qty')::numeric * (item->>'price')::numeric), COUNT(*)
+	            FROM orders, jsonb_array_elements(data->'items') AS item
+	            WHERE (item->>'price')::numeric > 50 GROUP BY 1, 2;
+	        
+2026-10-31 20:15:53.924 UTC [1] LOG:  terminating any other active server processes
+2026-10-31 20:15:55.517 UTC [1] LOG:  all server processes terminated; reinitializing
+2026-10-31 20:15:55.663 UTC [186] LOG:  database system was interrupted; last known up at 2026-10-31 20:02:51 UTC
+2026-10-31 20:15:55.770 UTC [186] LOG:  database system was not properly shut down; automatic recovery in progress
+2026-10-31 20:15:55.773 UTC [186] LOG:  redo starts at 0/57D13EF0
+2026-10-31 20:15:55.773 UTC [186] LOG:  invalid record length at 0/57D14048: expected at least 24, got 0
+2026-10-31 20:15:55.773 UTC [186] LOG:  redo done at 0/57D13FF8 system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
+2026-10-31 20:15:55.776 UTC [187] LOG:  checkpoint starting: end-of-recovery immediate wait
+2026-10-31 20:15:55.784 UTC [187] LOG:  checkpoint complete: wrote 0 buffers (0.0%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.003 s, sync=0.002 s, total=0.010 s; sync files=2, longest=0.001 s, average=0.001 s; distance=0 kB, estimate=0 kB; lsn=0/57D14048, redo lsn=0/57D14048
+2026-10-31 20:15:55.790 UTC [1] LOG:  database system is ready to accept connections
+2026-10-31 20:34:53.413 UTC [1] LOG:  client backend (PID 269) was terminated by signal 9: Killed
+2026-10-31 20:34:53.413 UTC [1] DETAIL:  Failed process was running: 
+	            SELECT data->'customer'->'geo'->>'country', item->>'category',
+	                   SUM((item->>'qty')::numeric * (item->>'price')::numeric),
+	                   AVG((item->>'qty')::numeric * (item->>'price')::numeric), COUNT(*)
+	            FROM orders, jsonb_array_elements(data->'items') AS item
+	            WHERE (item->>'price')::numeric > 50 GROUP BY 1, 2;
+	        
+2026-10-31 20:34:53.413 UTC [1] LOG:  terminating any other active server processes
+2026-10-31 20:34:54.808 UTC [1] LOG:  all server processes terminated; reinitializing
+2026-10-31 20:34:54.932 UTC [333] LOG:  database system was interrupted; last known up at 2026-10-31 20:15:55 UTC
+2026-10-31 20:34:55.048 UTC [333] LOG:  database system was not properly shut down; automatic recovery in progress
+2026-10-31 20:34:55.051 UTC [333] LOG:  redo starts at 0/57D140C0
+2026-10-31 20:34:55.051 UTC [333] LOG:  invalid record length at 0/57D140F8: expected at least 24, got 0
+2026-10-31 20:34:55.051 UTC [333] LOG:  redo done at 0/57D140C0 system usage: CPU: user: 0.00 s, system: 0.00 s, elapsed: 0.00 s
+2026-10-31 20:34:55.056 UTC [334] LOG:  checkpoint starting: end-of-recovery immediate wait
+2026-10-31 20:34:55.064 UTC [334] LOG:  checkpoint complete: wrote 0 buffers (0.0%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.003 s, sync=0.002 s, total=0.010 s; sync files=2, longest=0.001 s, average=0.001 s; distance=0 kB, estimate=0 kB; lsn=0/57D140F8, redo lsn=0/57D140F8
+2026-10-31 20:34:55.074 UTC [1] LOG:  database system is ready to accept connections

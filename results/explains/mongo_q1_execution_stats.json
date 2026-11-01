@@ -1,0 +1,149 @@
+benchmark_db> | | | | | | | | | {
+  explainVersion: '1',
+  stages: [
+    {
+      '$cursor': {
+        queryPlanner: {
+          namespace: 'benchmark_db.orders',
+          parsedQuery: {},
+          indexFilterSet: false,
+          queryHash: '51018CFF',
+          planCacheShapeHash: '51018CFF',
+          planCacheKey: '7CF6F44B',
+          optimizationTimeMillis: 1,
+          optimizationTimeMicros: 1830,
+          cursorType: 'regular',
+          maxIndexedOrSolutionsReached: false,
+          maxIndexedAndSolutionsReached: false,
+          maxScansToExplodeReached: false,
+          prunedSimilarIndexes: false,
+          winningPlan: {
+            isCached: false,
+            stage: 'PROJECTION_DEFAULT',
+            transformBy: { 'customer.geo.country': 1, items: 1, _id: 0 },
+            inputStage: {
+              stage: 'COLLSCAN',
+              nss: 'benchmark_db.orders',
+              direction: 'forward'
+            }
+          },
+          rejectedPlans: []
+        },
+        executionStats: {
+          executionSuccess: true,
+          nReturned: 500000,
+          executionTimeMillis: 3707,
+          executionTimeMicros: 3707099,
+          totalKeysExamined: 0,
+          totalDocsExamined: 500000,
+          executionStages: {
+            isCached: false,
+            stage: 'PROJECTION_DEFAULT',
+            nReturned: 500000,
+            executionTimeMillisEstimate: 1078,
+            works: 500001,
+            advanced: 500000,
+            needTime: 0,
+            needYield: 0,
+            saveState: 197,
+            restoreState: 196,
+            isEOF: 1,
+            transformBy: { 'customer.geo.country': 1, items: 1, _id: 0 },
+            peakTrackedMemBytes: 0,
+            inputStage: {
+              stage: 'COLLSCAN',
+              nReturned: 500000,
+              executionTimeMillisEstimate: 753,
+              works: 500001,
+              advanced: 500000,
+              needTime: 0,
+              needYield: 0,
+              saveState: 197,
+              restoreState: 196,
+              isEOF: 1,
+              nss: 'benchmark_db.orders',
+              direction: 'forward',
+              docsExamined: 500000,
+              seeks: 0
+            }
+          }
+        }
+      },
+      nReturned: Long('500000'),
+      executionTimeMillisEstimate: Long('1417')
+    },
+    {
+      '$unwind': { path: '$items' },
+      nReturned: Long('1503243'),
+      executionTimeMillisEstimate: Long('1714')
+    },
+    {
+      '$match': { 'items.price': { '$gt': 50 } },
+      nReturned: Long('1380577'),
+      executionTimeMillisEstimate: Long('2419'),
+      expressionEvaluationPeakMemoryBytes: Long('512')
+    },
+    {
+      '$group': {
+        _id: {
+          country: '$customer.geo.country',
+          category: '$items.category'
+        },
+        total_revenue: { '$sum': { '$multiply': [ '$items.qty', '$items.price' ] } },
+        avg_revenue: { '$avg': { '$multiply': [ '$items.qty', '$items.price' ] } },
+        count: { '$sum': { '$const': 1 } },
+        '$willBeMerged': false
+      },
+      nReturned: Long('30'),
+      executionTimeMillisEstimate: Long('3698'),
+      maxAccumulatorMemoryUsageBytes: {
+        total_revenue: Long('6000'),
+        avg_revenue: Long('5280'),
+        count: Long('6000')
+      },
+      totalOutputDataSizeBytes: Long('16140'),
+      usedDisk: false,
+      spills: Long('0'),
+      spilledDataStorageSize: Long('0'),
+      spilledBytes: Long('0'),
+      spilledRecords: Long('0'),
+      peakTrackedMemBytes: Long('19920')
+    }
+  ],
+  queryShapeHash: '5C4FF06C83518147637381DA483F71E04E0D8E6ECD8C64DAC9024EAFF0372944',
+  peakTrackedMemBytes: Long('20432'),
+  serverInfo: {
+    host: 'facac1c90a77',
+    port: 27017,
+    version: '9.0.4',
+    gitVersion: '64ade602b836c9adeffba7fa038c887ffab56196'
+  },
+  serverParameters: {
+    internalQueryFacetMaxOutputDocSizeBytes: 104857600,
+    internalLookupStageIntermediateDocumentMaxSizeBytes: 104857600,
+    internalQueryProhibitBlockingMergeOnMongoS: 0,
+    internalQueryFrameworkControl: 'trySbeRestricted',
+    internalQueryPlannerIgnoreIndexWithCollationForRegex: 1
+  },
+  command: {
+    aggregate: 'orders',
+    pipeline: [
+      { '$unwind': '$items' },
+      { '$match': { 'items.price': { '$gt': 50 } } },
+      {
+        '$group': {
+          _id: {
+            country: '$customer.geo.country',
+            category: '$items.category'
+          },
+          total_revenue: { '$sum': { '$multiply': [ '$items.qty', '$items.price' ] } },
+          avg_revenue: { '$avg': { '$multiply': [ '$items.qty', '$items.price' ] } },
+          count: { '$sum': 1 }
+        }
+      }
+    ],
+    cursor: {},
+    '$db': 'benchmark_db'
+  },
+  ok: 1
+}

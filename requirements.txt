@@ -1,5 +1,0 @@
-numpy
-psycopg2-binary
-pymongo
-pandas
-matplotlib

@@ -1,0 +1,118 @@
+name: docker
+services:
+  cadvisor:
+    container_name: cadvisor
+    image: gcr.io/cadvisor/cadvisor:latest
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 8080
+        published: "8080"
+        protocol: tcp
+    volumes:
+      - type: bind
+        source: /
+        target: /rootfs
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: /var/run
+        target: /var/run
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: /sys
+        target: /sys
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: /var/lib/docker/
+        target: /var/lib/docker
+        read_only: true
+        bind:
+          create_host_path: true
+  mongodb:
+    container_name: benchmark_mongo
+    deploy:
+      resources:
+        limits:
+          cpus: 4
+          memory: "4294967296"
+    environment:
+      MONGO_INITDB_DATABASE: benchmark_db
+    image: mongo:latest
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 27017
+        published: "27017"
+        protocol: tcp
+    volumes:
+      - type: volume
+        source: mongo_data
+        target: /data/db
+        volume: {}
+  node_exporter:
+    container_name: node_exporter
+    image: prom/node-exporter:latest
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 9100
+        published: "9100"
+        protocol: tcp
+  postgres:
+    container_name: benchmark_pg
+    deploy:
+      resources:
+        limits:
+          cpus: 4
+          memory: "4294967296"
+    environment:
+      POSTGRES_DB: benchmark_db
+      POSTGRES_PASSWORD: "123456"
+      POSTGRES_USER: postgres
+    image: postgres:latest
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 5432
+        published: "5432"
+        protocol: tcp
+    shm_size: "1073741824"
+    volumes:
+      - type: volume
+        source: pg_data
+        target: /var/lib/postgresql/data
+        volume: {}
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus:latest
+    networks:
+      default: null
+    ports:
+      - mode: ingress
+        target: 9090
+        published: "9090"
+        protocol: tcp
+    volumes:
+      - type: bind
+        source: /home/diego/benchmark-mongo/docker/prometheus/prometheus.yml
+        target: /etc/prometheus/prometheus.yml
+        bind:
+          create_host_path: true
+networks:
+  default:
+    name: docker_default
+volumes:
+  mongo_data:
+    name: docker_mongo_data
+  pg_data:
+    name: docker_pg_data
